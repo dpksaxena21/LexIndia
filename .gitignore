@@ -1,0 +1,18 @@
+# Secret Keys - never upload these
+.env
+
+# Python virtual environment - too large for github
+vakilai_env/
+
+# Python cache files
+
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code settings
+.vscode/
+
+# Windows files
+Thumbs.db
+Desktop.ini
