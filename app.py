@@ -352,7 +352,9 @@ Please provide:
 6. Constitutional Amendments — relevant amendments that changed or affected this provision
 7. Pending issues — unresolved constitutional questions and ongoing debates
 
-Be thorough, cite actual cases, and include current affairs where relevant."""                
+Be thorough, cite actual cases, and include current affairs where relevant.
+Also explain each Article in simple plain language with real life examples that a common person can understand.
+For example, explain Article 25 as if telling a farmer in a village what rights he has regarding his religion."""                
 
                     try:
                         message = client.messages.create(
