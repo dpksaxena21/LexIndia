@@ -253,6 +253,53 @@ Be clear, accurate, and practical."""
                 st.markdown(message.content[0].text)
             except Exception as e:
                 st.error(f"Error: {str(e)}")
+# ─── LEXDEBATE MODULE ─────────────────────────────────────────────────────────
+
+elif st.session_state.module == "lexdebate":
+    st.markdown("## ⚔️ LexDebate - Counter Argument Finder")
+    st.markdown("*Enter your legal argument and get the strongest counter arguments from Indian case law.*")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1,4,1])
+    with col2:
+        with st.form("lexdebate_form"):
+            argument = st.text_area(
+                label = "Legal Argument",
+                placeholder = "e.g. My client should get bail because he has no prior criminal record and is a permanent resident of the city... ",
+                height = 150,
+                label_visibility = "collapsed"
+                )
+            debate_clicked = st.form_submit_button("⚔️ Find Counter Arguments")
+            if debate_clicked and not argument:
+                st.warning("Please enter a legal argument to find counter arguments.")  
+            
+        if debate_clicked and argument:
+            with st.spinner("Find counter arguments from Indian case law..."):
+                client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                prompt = f"""You are a senior Indian lawyer preparing for the opposing side.
+
+A lawyer has made this argument:
+"{argument}"
+
+Please provide:
+1. The strongest counter-arguments the opposing counsel will make
+2. Indian cases that support the opposing position
+3. Weaknesses in the original argument
+4. How the original lawyer can strengthen their argument to anticipate these counters
+5. Relevant sections or provisions the opposing side will cite
+
+Be specific, cite actual Indian cases, and be practical for a courtroom setting."""
+                try:
+                    message = client.messages.create(
+                        model= "claude-haiku-4-5-20251001",
+                        max_tokens = 4096,
+                        messages=[{"role": "user", "content": prompt }]
+                    )
+                    st.markdown("### ⚔️ Counter Arguments")
+                    st.markdown(message.content[0].text)
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                
 
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
@@ -261,3 +308,6 @@ else:
     st.markdown("We are building this module. Check back soon.")
     st.markdown("---")
     st.markdown("Meanwhile, use **LexSearch** or **LexPlain** from the sidebar.")
+    
+
+
