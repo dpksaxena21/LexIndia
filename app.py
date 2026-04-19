@@ -7,10 +7,12 @@ import os
 import re
 import anthropic
 from dotenv import load_dotenv
+from tavily import TavilyClient
 
 load_dotenv()
 INDIAN_KANOON_TOKEN = os.getenv("INDIAN_KANOON_TOKEN")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 # Page Configuration
 st.set_page_config(
@@ -300,7 +302,68 @@ Be specific, cite actual Indian cases, and be practical for a courtroom setting.
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
                 
+# ─── LEXCONSTITUTE MODULE ────────────────────────────────────────────────────
+elif st.session_state.module == "lexconstitute":
+    st.markdown("## 🏛️ LexConstitute - Constitutional Advisor")
+    st.markdown("*Ask any constituional question and get answer with relevant Articles, landmark cases, amendments, practical implications, and live current affairs.*")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1,4,1])
+    with col2:
+        with st.form("lexconstitute_form"):
+            const_query = st.text_input(
+                label = "Constituitional  Query",
+                placeholder= "e.g. What are the limits of Article 19? Explain basic structure doctrine. Can Parliament amend Fundamental Rights?",
+                label_visibility = "collapsed"
+            )
+            
+            const_clicked = st.form_submit_button("🏛️ Get Constitutional Analysis")
+            if const_clicked and not const_query:
+                st.warning("Please enter a constitutional question")
+            if const_clicked and const_query:
+                with st.spinner("Searching for latest development..."):
+                    try:
+                        tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                        search_results = tavily_client.search(
+                            query=f"{const_query} India Supreme Court 2025-2025",
+                            search_depth= "basic",
+                            max_results=5
+                        )
+                        recent_news = ""
+                        for result in search_results.get("results", []):
+                            recent_news+= f"- {result['title']}: {result['content'][:300]}\n"
+                    except Exception:
+                        recent_news = "No recent news available."
+                with st.spinner("Generating constitutional analysis..."):
+                    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                    prompt = f"""You are a constitutional law expert specializing in Indian law.
 
+Question: "{const_query}"
+
+Recent news and developments from the web:
+{recent_news}
+
+Please provide:
+1. Constitutional provisions — relevant Articles with exact text
+2. Landmark Supreme Court cases that established key principles
+3. Current legal position — how courts interpret this today
+4. Recent developments — based on the news above, what is happening now
+5. Practical implications for lawyers and citizens
+6. Constitutional Amendments — relevant amendments that changed or affected this provision
+7. Pending issues — unresolved constitutional questions and ongoing debates
+
+Be thorough, cite actual cases, and include current affairs where relevant."""                
+
+                    try:
+                        message = client.messages.create(
+                            model="claude-haiku-4-5-20251001",
+                            max_tokens=4096,
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        st.markdown("### 🏛️ Constitutional Analysis")
+                        st.markdown(message.content[0].text)
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")

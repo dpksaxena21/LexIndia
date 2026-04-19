@@ -51,7 +51,7 @@ def summarize_case(title, court, date, judgment_text = ''):
     client = anthropic.Anthropic(api_key = CLAUDE_API_KEY)
 
     if judgment_text:
-        content = f"Here is the full judgment text:\n{judgment_text[:3000]}"
+        content = f"Here is the full judgment text:\n{judgment_text[:6000]}"
     else:
         content = f"Case: {title}\nCourt: {court}\nDate: {date}"
 
