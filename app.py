@@ -77,6 +77,8 @@ st.markdown("""
 # Initialise session state
 if "module" not in st.session_state:
     st.session_state.module = "lexsearch"
+if "history" not in st.session_state:
+    st.session_state.history = []
 
 # Sidebar Navigation
 with st.sidebar:
@@ -126,6 +128,14 @@ with st.sidebar:
             st.session_state.module = "lexmap"
 
     st.markdown("---")
+    st.markdown("### 🕐 Recent Searches")
+    if st.session_state.history:
+        for item in reversed(st.session_state.history[-10:]):
+            st.markdown(f"**{item['module']}**")
+            st.markdown(f"*{item['query'][:60]}...*" if len(item['query']) > 60 else f"*{item['query']}*")
+            st.markdown("---")
+    else:
+        st.markdown("*No searches yet.*")
     st.markdown("*Powered by Indian Kanoon API and Claude AI*")
 
 # Main Page Header
@@ -157,6 +167,8 @@ if st.session_state.module == "lexsearch":
                 st.warning("Please enter a legal query to search.")
 
     if search_clicked and search_query:
+        st.session_state.history.append({"module": "🔍 LexSearch", "query": search_query})
+        
         with st.spinner("Searching Indian Kanoon..."):
             params = {"formInput": search_query, "pagenum": 0}
             url = "https://api.indiankanoon.org/search/"
@@ -229,6 +241,8 @@ elif st.session_state.module == "lexplain":
                 st.warning("Please enter a legal concept to explain.")
 
     if explain_clicked and legal_query:
+        st.session_state.history.append({"module": "📖 LexPlain", "query": legal_query})
+        
         with st.spinner("Generating explanation..."):
             client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
             prompt = f"""You are a legal expert specializing in Indian law.
@@ -276,6 +290,7 @@ elif st.session_state.module == "lexdebate":
                 st.warning("Please enter a legal argument to find counter arguments.")  
             
         if debate_clicked and argument:
+            st.session_state.history.append({"module": "⚔️ LexDebate", "query": argument[:80]})
             with st.spinner("Find counter arguments from Indian case law..."):
                 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
                 prompt = f"""You are a senior Indian lawyer preparing for the opposing side.
@@ -321,6 +336,7 @@ elif st.session_state.module == "lexconstitute":
             if const_clicked and not const_query:
                 st.warning("Please enter a constitutional question")
             if const_clicked and const_query:
+                st.session_state.history.append({"module": "🏛️ LexConstitute", "query": const_query})
                 with st.spinner("Searching for latest development..."):
                     try:
                         tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
