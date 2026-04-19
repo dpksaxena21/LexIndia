@@ -168,7 +168,6 @@ if st.session_state.module == "lexsearch":
 
     if search_clicked and search_query:
         st.session_state.history.append({"module": "🔍 LexSearch", "query": search_query})
-        
         with st.spinner("Searching Indian Kanoon..."):
             params = {"formInput": search_query, "pagenum": 0}
             url = "https://api.indiankanoon.org/search/"
@@ -227,7 +226,6 @@ elif st.session_state.module == "lexplain":
     st.markdown("## 📖 LexPlain — Law Explainer")
     st.markdown("*Type any legal concept, section, or term and get a plain language explanation.*")
     st.markdown("---")
-
     col1, col2, col3 = st.columns([1, 4, 1])
     with col2:
         with st.form("lexplain_form"):
@@ -239,10 +237,8 @@ elif st.session_state.module == "lexplain":
             explain_clicked = st.form_submit_button("💡 Explain")
             if explain_clicked and not legal_query:
                 st.warning("Please enter a legal concept to explain.")
-
     if explain_clicked and legal_query:
         st.session_state.history.append({"module": "📖 LexPlain", "query": legal_query})
-        
         with st.spinner("Generating explanation..."):
             client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
             prompt = f"""You are a legal expert specializing in Indian law.
@@ -258,7 +254,6 @@ Please provide:
 6. Practical examples of how this applies in real cases
 
 Be clear, accurate, and practical."""
-
             try:
                 message = client.messages.create(
                     model="claude-haiku-4-5-20251001",
@@ -269,31 +264,29 @@ Be clear, accurate, and practical."""
                 st.markdown(message.content[0].text)
             except Exception as e:
                 st.error(f"Error: {str(e)}")
-# ─── LEXDEBATE MODULE ─────────────────────────────────────────────────────────
 
+# ─── LEXDEBATE MODULE ─────────────────────────────────────────────────────────
 elif st.session_state.module == "lexdebate":
     st.markdown("## ⚔️ LexDebate - Counter Argument Finder")
     st.markdown("*Enter your legal argument and get the strongest counter arguments from Indian case law.*")
     st.markdown("---")
-    
-    col1, col2, col3 = st.columns([1,4,1])
+    col1, col2, col3 = st.columns([1, 4, 1])
     with col2:
         with st.form("lexdebate_form"):
             argument = st.text_area(
-                label = "Legal Argument",
-                placeholder = "e.g. My client should get bail because he has no prior criminal record and is a permanent resident of the city... ",
-                height = 150,
-                label_visibility = "collapsed"
-                )
+                label="Legal Argument",
+                placeholder="e.g. My client should get bail because he has no prior criminal record...",
+                height=150,
+                label_visibility="collapsed"
+            )
             debate_clicked = st.form_submit_button("⚔️ Find Counter Arguments")
             if debate_clicked and not argument:
-                st.warning("Please enter a legal argument to find counter arguments.")  
-            
-        if debate_clicked and argument:
-            st.session_state.history.append({"module": "⚔️ LexDebate", "query": argument[:80]})
-            with st.spinner("Find counter arguments from Indian case law..."):
-                client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-                prompt = f"""You are a senior Indian lawyer preparing for the opposing side.
+                st.warning("Please enter a legal argument.")
+    if debate_clicked and argument:
+        st.session_state.history.append({"module": "⚔️ LexDebate", "query": argument[:80]})
+        with st.spinner("Finding counter arguments..."):
+            client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+            prompt = f"""You are a senior Indian lawyer preparing for the opposing side.
 
 A lawyer has made this argument:
 "{argument}"
@@ -302,57 +295,55 @@ Please provide:
 1. The strongest counter-arguments the opposing counsel will make
 2. Indian cases that support the opposing position
 3. Weaknesses in the original argument
-4. How the original lawyer can strengthen their argument to anticipate these counters
+4. How the original lawyer can strengthen their argument
 5. Relevant sections or provisions the opposing side will cite
 
 Be specific, cite actual Indian cases, and be practical for a courtroom setting."""
-                try:
-                    message = client.messages.create(
-                        model= "claude-haiku-4-5-20251001",
-                        max_tokens = 4096,
-                        messages=[{"role": "user", "content": prompt }]
-                    )
-                    st.markdown("### ⚔️ Counter Arguments")
-                    st.markdown(message.content[0].text)
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-                
+            try:
+                message = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                st.markdown("### ⚔️ Counter Arguments")
+                st.markdown(message.content[0].text)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+
 # ─── LEXCONSTITUTE MODULE ────────────────────────────────────────────────────
 elif st.session_state.module == "lexconstitute":
     st.markdown("## 🏛️ LexConstitute - Constitutional Advisor")
-    st.markdown("*Ask any constituional question and get answer with relevant Articles, landmark cases, amendments, practical implications, and live current affairs.*")
+    st.markdown("*Ask any constitutional question and get an answer with relevant Articles, landmark cases, amendments, and live current affairs.*")
     st.markdown("---")
-    
-    col1, col2, col3 = st.columns([1,4,1])
+    col1, col2, col3 = st.columns([1, 4, 1])
     with col2:
         with st.form("lexconstitute_form"):
             const_query = st.text_input(
-                label = "Constituitional  Query",
-                placeholder= "e.g. What are the limits of Article 19? Explain basic structure doctrine. Can Parliament amend Fundamental Rights?",
-                label_visibility = "collapsed"
+                label="Constitutional Query",
+                placeholder="e.g. What are the limits of Article 19? Explain basic structure doctrine.",
+                label_visibility="collapsed"
             )
-            
             const_clicked = st.form_submit_button("🏛️ Get Constitutional Analysis")
             if const_clicked and not const_query:
-                st.warning("Please enter a constitutional question")
-            if const_clicked and const_query:
-                st.session_state.history.append({"module": "🏛️ LexConstitute", "query": const_query})
-                with st.spinner("Searching for latest development..."):
-                    try:
-                        tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
-                        search_results = tavily_client.search(
-                            query=f"{const_query} India Supreme Court 2025-2025",
-                            search_depth= "basic",
-                            max_results=5
-                        )
-                        recent_news = ""
-                        for result in search_results.get("results", []):
-                            recent_news+= f"- {result['title']}: {result['content'][:300]}\n"
-                    except Exception:
-                        recent_news = "No recent news available."
-                with st.spinner("Generating constitutional analysis..."):
-                    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-                    prompt = f"""You are a constitutional law expert specializing in Indian law.
+                st.warning("Please enter a constitutional question.")
+    if const_clicked and const_query:
+        st.session_state.history.append({"module": "🏛️ LexConstitute", "query": const_query})
+        with st.spinner("Searching for latest developments..."):
+            try:
+                tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                search_results = tavily_client.search(
+                    query=f"{const_query} India Supreme Court 2024 2025",
+                    search_depth="basic",
+                    max_results=5
+                )
+                recent_news = ""
+                for result in search_results.get("results", []):
+                    recent_news += f"- {result['title']}: {result['content'][:300]}\n"
+            except Exception:
+                recent_news = "No recent news available."
+        with st.spinner("Generating constitutional analysis..."):
+            client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+            prompt = f"""You are a constitutional law expert specializing in Indian law.
 
 Question: "{const_query}"
 
@@ -361,27 +352,26 @@ Recent news and developments from the web:
 
 Please provide:
 1. Constitutional provisions — relevant Articles with exact text
-2. Landmark Supreme Court cases that established key principles
-3. Current legal position — how courts interpret this today
-4. Recent developments — based on the news above, what is happening now
-5. Practical implications for lawyers and citizens
-6. Constitutional Amendments — relevant amendments that changed or affected this provision
-7. Pending issues — unresolved constitutional questions and ongoing debates
+2. Simple plain language explanation of each Article with real life examples
+3. Landmark Supreme Court cases that established key principles
+4. Current legal position — how courts interpret this today
+5. Recent developments — based on the news above
+6. Practical implications for lawyers and citizens
+7. Constitutional Amendments — relevant amendments that changed this provision
+8. Pending issues — unresolved constitutional questions
 
-Be thorough, cite actual cases, and include current affairs where relevant.
-Also explain each Article in simple plain language with real life examples that a common person can understand.
-For example, explain Article 25 as if telling a farmer in a village what rights he has regarding his religion."""                
+Be thorough, cite actual cases, and include current affairs where relevant."""
+            try:
+                message = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                st.markdown("### 🏛️ Constitutional Analysis")
+                st.markdown(message.content[0].text)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
-                    try:
-                        message = client.messages.create(
-                            model="claude-haiku-4-5-20251001",
-                            max_tokens=4096,
-                            messages=[{"role": "user", "content": prompt}]
-                        )
-                        st.markdown("### 🏛️ Constitutional Analysis")
-                        st.markdown(message.content[0].text)
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
@@ -389,6 +379,3 @@ else:
     st.markdown("We are building this module. Check back soon.")
     st.markdown("---")
     st.markdown("Meanwhile, use **LexSearch** or **LexPlain** from the sidebar.")
-    
-
-
