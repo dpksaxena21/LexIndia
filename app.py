@@ -592,8 +592,8 @@ elif st.session_state.module == "lexdraft":
 
     doc_types = {
         "Criminal": [
-            "Regular Bail Application (S.439 BNSS)",
-            "Anticipatory Bail Application (S.438 BNSS)",
+            "Regular Bail Application (S.483 BNSS)",
+            "Anticipatory Bail Application (S.482 BNSS)",
             "Quashing Petition (S.528 BNSS)",
             "Discharge Application",
             "Bail Cancellation Opposition",
@@ -717,7 +717,7 @@ IN THE MATTER OF:
 VERSUS
 STATE OF [STATE] ... Respondent
 
-APPLICATION FOR REGULAR BAIL UNDER SECTION 439 BNSS, 2023
+APPLICATION FOR REGULAR BAIL UNDER SECTION 483 BNSS, 2023
 
 MOST RESPECTFULLY SHOWETH:
 1. That the applicant [name], aged [age], S/o [father], resident of [address], is the accused in FIR No. [X]/[YEAR] registered at PS [Name] under Sections [X] BNS, 2023.
