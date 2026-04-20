@@ -170,7 +170,27 @@ if st.session_state.module == "lexsearch":
 
     if search_clicked and search_query:
         st.session_state.history.append({"module": "🔍 LexSearch", "query": search_query})
-        with st.spinner("Searching Indian Kanoon..."):
+
+        # Search India Code for statutory text
+        with st.spinner("Searching India Code for statutory text..."):
+            try:
+                tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                india_code_results = tavily_client.search(
+                    query=f"{search_query} site:indiacode.nic.in",
+                    search_depth="basic",
+                    max_results=3
+                )
+                india_code_text = ""
+                for result in india_code_results.get("results", []):
+                    india_code_text += f"**{result['title']}**\n{result['content'][:500]}\n\n"
+                if india_code_text:
+                    st.markdown("### 📜 Statutory Text — India Code")
+                    st.markdown(india_code_text)
+                    st.markdown("---")
+            except Exception:
+                pass
+
+        with st.spinner("Searching Indian Kanoon for cases..."):
             params = {"formInput": search_query, "pagenum": 0}
             url = "https://api.indiankanoon.org/search/"
             headers = {"Authorization": f"Token {INDIAN_KANOON_TOKEN}"}
@@ -457,3 +477,11 @@ You are the lawyer every lawyer wishes they could call at midnight before a hear
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
+
+# ─── COMING SOON MODULES ─────────────────────────────────────────────────────
+else:
+    st.markdown("## 🚧 Coming Soon")
+    st.markdown(f"**{st.session_state.module.upper()}** is under development.")
+    st.markdown("We are building this module. Check back soon.")
+    st.markdown("---")
+    st.markdown("Meanwhile, use **LexSearch** or **LexPlain** from the sidebar.")
