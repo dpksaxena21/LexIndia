@@ -79,6 +79,8 @@ if "module" not in st.session_state:
     st.session_state.module = "lexsearch"
 if "history" not in st.session_state:
     st.session_state.history = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # Sidebar Navigation
 with st.sidebar:
@@ -372,10 +374,86 @@ Be thorough, cite actual cases, and include current affairs where relevant."""
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# ─── COMING SOON MODULES ─────────────────────────────────────────────────────
-else:
-    st.markdown("## 🚧 Coming Soon")
-    st.markdown(f"**{st.session_state.module.upper()}** is under development.")
-    st.markdown("We are building this module. Check back soon.")
+# ─── LEXCHAT MODULE ──────────────────────────────────────────────────────────
+
+elif st.session_state.module == "lexchat":
+    st.markdown("## 💬 LexChat - Legal Chatbot")
+    st.markdown("*Describe your legal situation and get expert advice. Ask follow-up questions.*")
     st.markdown("---")
-    st.markdown("Meanwhile, use **LexSearch** or **LexPlain** from the sidebar.")
+    
+    st.warning("⚠️ **Privacy Notice:** Do not enter client names, case numbers, or any identifying information. Use generic terms like 'my client', 'the accused', 'the complainant'. Your conversation is processed by AI servers.")
+    
+    # Show conversation history
+    for message in st.session_state.chat_history:
+        if message["role"] == "user":
+            st.markdown(f"**🧑‍⚖️ You:** {message['content']} ")
+        else:
+            st.markdown(f"**⚖️ LexChat:** {message['content']}")
+        st.markdown("---")
+        
+    # Clear chat button
+    if st.session_state.chat_history:
+        if st.button("🗑️ Clear Chat"):
+            st.session_state.chat_history = []
+            st.rerun()
+            
+    # Input form
+    col1, col2, col3 = st.columns([1,4,1])
+    with col2:
+        with st.form("lexchat_form"):
+            user_message = st.text_area(
+                label = "Your message",
+                placeholder="e.g. My client hit someone with a car. Person is injured. What should I do immediately?",
+                height=100,
+                label_visibility="collapsed"
+            )
+            chat_clicked = st.form_submit_button("💬 Send")
+            if chat_clicked and not user_message:
+                st.warning("Please type your message.")
+                
+            if chat_clicked and user_message:
+                st.session_state.history.append({"module": "💬 LexChat", "query": user_message[:80]})
+                st.session_state.chat_history.append({"role": "user", "content": user_message})
+                with st.spinner("LexChat is thinking..."):
+                    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                    system_prompt = """You are LexChat — a legendary legal mind with over 50 years of experience in Indian and international law.
+
+Your background:
+- Former Supreme Court of India advocate with 500+ landmark cases
+- Retired High Court Judge with expertise in constitutional, criminal, and civil law
+- Deep knowledge of IPC, CrPC, BNS, BNSS, Indian Evidence Act, Constitution of India
+- Expert in international law, human rights law, and comparative jurisprudence
+- Have appeared before the Supreme Court, High Courts, Sessions Courts, and Tribunals
+- Authored legal commentaries and textbooks on Indian criminal and constitutional law
+- Mentored hundreds of lawyers across India
+
+Your approach:
+- You give precise, practical, actionable legal advice
+- You always cite the exact section, article, or case with year and court
+- You think like both a defence lawyer AND a prosecutor — you see all angles
+- You explain complex law in simple language without losing accuracy
+- You anticipate what the opposing side will argue
+- You know which judges are strict, which courts are lenient, which arguments work
+- You understand the ground reality of Indian courts — not just textbook law
+
+Your rules:
+- Never give vague or generic answers
+- Always be specific to Indian law and Indian court procedure
+- Cite BNS/BNSS for new cases, IPC/CrPC for old cases
+- Never encourage sharing client names, case numbers, or identifying details
+- If you do not know something — say so honestly rather than guessing
+- Always tell the lawyer what to do NEXT — immediate steps, not just theory
+
+You are the lawyer every lawyer wishes they could call at midnight before a hearing."""
+                    try:
+                        message = client.messages.create(
+                            model="claude-haiku-4-5-20251001",
+                            max_tokens=4096,
+                            system=system_prompt,
+                            messages=st.session_state.chat_history
+                        )
+                        assistant_response = message.content[0].text
+                        st.session_state.chat_history.append({"role": "assistant", "content": assistant_response})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
