@@ -13,6 +13,7 @@ load_dotenv()
 INDIAN_KANOON_TOKEN = os.getenv("INDIAN_KANOON_TOKEN")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+ECOURTS_API_KEY = os.getenv("ECOURTS_API_KEY")
 
 # Page Configuration
 st.set_page_config(
@@ -478,6 +479,97 @@ You are the lawyer every lawyer wishes they could call at midnight before a hear
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
 
+# ─── LEXTRACK MODULE ─────────────────────────────────────────────────────────
+
+elif st.session_state.module == "lextrack":
+    st.markdown("## 📡 LexTrack — Live Case Updates")
+    st.markdown("*Enter a CNR number to get real-time case status, hearing dates, and orders.*")
+    st.markdown("---")
+    
+    st.info("💡 **What is CNR?** Every court case in India has a unique CNR (Case Number Record). Format: DLHC010001232024 — State code + Court code + Case number + Year")
+    
+    col1, col2, col3 = st.columns([1,4,1])
+    with col2:
+        with st.form("lextrack_form"):
+            cnr_number = st.text_input(
+                label="CNR Number",
+                placeholder="e.g. DLHC010001232024",
+                label_visibility="collapsed"
+            )
+            track_clicked = st.form_submit_button("📡 Track Case")
+            if track_clicked and not cnr_number:
+                st.warning("Please enter a CNR Number")
+            if track_clicked and cnr_number:
+                st.session_state.history.append({"module": "📡 LexTrack", "query": cnr_number})
+                with st.spinner("Fetching live case data from eCourts..."):
+                    try:
+                        url = f"https://webapi.ecourtsindia.com/api/partner/case/{cnr_number.strip().upper()}"
+                        headers = {"Authorization": f"Bearer {ECOURTS_API_KEY}"}
+                        response = requests.get(url, headers=headers)
+                        if response.status_code == 200:
+                            data = response.json()
+                            st.success("✅ Case found!")
+                            st.markdown("---")
+                            
+                        
+                            # Case Details
+                            st.markdown("### 📋 Case Details")
+                            case_data = data.get('data', {}).get('courtCaseData', {})
+                            entity_info = data.get('data', {}).get('entityInfo', {})
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"**Case Number:** {case_data.get('filingNumber', 'N/A')}")
+                                st.markdown(f"**Case Type:** {case_data.get('caseTypeRaw', 'N/A')}")
+                                st.markdown(f"**Filing Date:** {case_data.get('filingDate', 'N/A')}")
+                                st.markdown(f"**Status:** {case_data.get('caseStatus', 'N/A')}")
+                            with col2:
+                                st.markdown(f"**Court:** {case_data.get('courtName', 'N/A')}")
+                                st.markdown(f"**Judge:** {', '.join(case_data.get('judges', ['N/A']))}")
+                                st.markdown(f"**Next Hearing:** {entity_info.get('nextDateOfHearing', 'N/A')}")
+                                st.markdown(f"**Last Hearing:** {case_data.get('lastHearingDate', 'N/A')}")
+
+                            # Parties
+                            st.markdown("---")
+                            st.markdown("### 👥 Parties")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"**Petitioner:** {', '.join(case_data.get('petitioners', ['N/A']))}")
+                            with col2:
+                                st.markdown(f"**Respondent:** {', '.join(case_data.get('respondents', ['N/A']))}")
+
+                            # Orders
+                            # Orders
+                            orders = case_data.get('judgmentOrders', [])
+                            files = data.get('data', {}).get('files', {}).get('files', [])
+                            if orders:
+                                st.markdown("---")
+                                st.markdown("### 📄 Recent Orders")
+                                for i, order in enumerate(orders[:3]):
+                                    st.markdown(f"**{order.get('orderDate', 'N/A')}** — {order.get('orderType', 'N/A')}")
+                                    if i < len(files):
+                                        markdown_content = files[i].get('markdownContent', '')
+                                        if markdown_content:
+                                            with st.expander("📖 Read Full Order"):
+                                                st.markdown(markdown_content)
+
+                            # IAs
+                            ias = case_data.get('interlocutoryApplications', [])
+                            if ias:
+                                st.markdown("---")
+                                st.markdown("### 📑 Interlocutory Applications")
+                                for ia in ias[:3]:
+                                    st.markdown(f"**{ia.get('regNo', 'N/A')}** — Filed by: {ia.get('filedBy', 'N/A')} — Status: {ia.get('status', 'N/A')}")
+                                           
+                        elif response.status_code == 404:
+                            st.error("Case not found. Please check the CNR Number and try again")
+                        elif response.status_code == 401:
+                            st.error("API authentication failed. Please check your API key.")
+                        else:
+                            st.error(f"Error fetching case data. Status: {response.status_code}")
+                    except Exception as e:
+                        st.error(f"Connection error: {str(e)}")
+
+                                
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
