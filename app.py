@@ -705,10 +705,10 @@ STRICT FORMATTING RULES:
 - Include proper cause title
 - Always end with PRAYER clause and VERIFICATION where required
 - Cite BNS/BNSS for offences after July 2024, IPC/CrPC for older matters
-
+- CRITICAL: Use correct BNSS 2023 sections — S.483 for regular bail, S.482 for anticipatory bail, S.187 for default bail, S.528 for quashing. Never use old CrPC sections 436/437/438/439/482 for post-July 2024 matters
 DOCUMENT TEMPLATES:
 
-═══ REGULAR BAIL APPLICATION (S.439 BNSS) ═══
+═══ REGULAR BAIL APPLICATION (S.483 BNSS) ═══
 IN THE COURT OF [COURT NAME]
 BAIL APPLICATION NO. ___ OF [YEAR]
 
@@ -744,8 +744,8 @@ Date: [Date]                Advocate for Applicant
 VERIFICATION:
 I, [Name], verify that the contents are true and correct to the best of my knowledge. Verified at [Place] on [Date].
 
-═══ ANTICIPATORY BAIL APPLICATION (S.438 BNSS) ═══
-IN THE COURT OF [SESSIONS COURT / HIGH COURT]
+═══ ANTICIPATORY BAIL APPLICATION (S.482 BNSS) ═══
+IN THE COURT OF
 ANTICIPATORY BAIL APPLICATION NO. ___ OF [YEAR]
 
 IN THE MATTER OF:
@@ -753,8 +753,7 @@ IN THE MATTER OF:
 VERSUS
 STATE OF [STATE] ... Respondent
 
-APPLICATION FOR ANTICIPATORY BAIL UNDER SECTION 438 BNSS, 2023
-
+APPLICATION FOR ANTICIPATORY BAIL UNDER SECTION 482 BNSS, 2023
 MOST RESPECTFULLY SHOWETH:
 1. That the applicant apprehends arrest in connection with [case/FIR details].
 2. That the applicant is [description — occupation, address, background].
