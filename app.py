@@ -11,6 +11,7 @@ from tavily import TavilyClient
 from docx import Document
 from docx.shared import Pt, Inches
 from io import BytesIO
+import fitz                       # pymupdf
 
 load_dotenv()
 INDIAN_KANOON_TOKEN = os.getenv("INDIAN_KANOON_TOKEN")
@@ -85,6 +86,10 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "scanned_dates" not in st.session_state:
+    st.session_state.scanned_dates = []
+if "scanned_docs" not in st.session_state:
+    st.session_state.scanned_docs = []
 
 # Sidebar Navigation
 with st.sidebar:
@@ -2012,7 +2017,280 @@ Make it professional, complete and ready to file in Indian courts."""
                     )
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
-                                
+ 
+# ─── LEXSCAN MODULE ──────────────────────────────────────────────────────────
+elif st.session_state.module == "lexscan":
+    st.markdown("## 🔬 LexScan — Legal Document Analyser")
+    st.markdown("*Upload any legal document and get AI-powered analysis with key dates, issues, and action items.*")
+    st.markdown("---")
+
+    st.info("🤖 **LexScan AI** reads FIRs, chargesheets, court orders, contracts, legal notices, and judgments. Supports PDF, Images, and Word documents.")
+
+    # ── Client Details ──────────────────────────────────────────────────────
+    st.markdown("### 👤 Client Details")
+    st.markdown("*Fill these details first — all extracted dates will be tagged to this client.*")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        scan_client = st.text_input("Client Name", placeholder="e.g. Rajesh Kumar")
+        scan_case = st.text_input("Case Number", placeholder="e.g. FIR No. 456/2024")
+        scan_court = st.text_input("Court", placeholder="e.g. Sessions Court Saket")
+    with col2:
+        scan_opponent = st.text_input("Opponent / Other Party", placeholder="e.g. State of Delhi")
+        scan_doc_type = st.selectbox("Document Type", [
+            "Court Order",
+            "FIR",
+            "Chargesheet",
+            "Bail Order",
+            "Judgment",
+            "Legal Notice",
+            "Contract / Agreement",
+            "Affidavit",
+            "Other"
+        ])
+
+    st.markdown("---")
+
+    # ── File Upload ──────────────────────────────────────────────────────────
+    st.markdown("### 📁 Upload Document")
+    uploaded_file = st.file_uploader(
+        "Upload PDF, Image (JPG/PNG), or Word (.docx)",
+        type=["pdf", "jpg", "jpeg", "png", "docx"]
+    )
+
+    if uploaded_file:
+        st.success(f"✅ File uploaded: **{uploaded_file.name}**")
+
+    if st.button("🔬 Analyse Document"):
+        if not scan_client:
+            st.warning("Please enter client name.")
+        elif not uploaded_file:
+            st.warning("Please upload a document.")
+        else:
+            with st.spinner("Reading document..."):
+                file_bytes = uploaded_file.read()
+                file_name = uploaded_file.name.lower()
+                extracted_text = ""
+                image_data = None
+                image_media_type = None
+                is_image = False
+
+                try:
+                    if file_name.endswith(".pdf"):
+                        pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                        for page in pdf_doc:
+                            extracted_text += page.get_text()
+                        pdf_doc.close()
+                        if len(extracted_text.strip()) < 50:
+                            pdf_doc2 = fitz.open(stream=file_bytes, filetype="pdf")
+                            page = pdf_doc2[0]
+                            mat = fitz.Matrix(2, 2)
+                            pix = page.get_pixmap(matrix=mat)
+                            image_data = pix.tobytes("png")
+                            pdf_doc2.close()
+                            is_image = True
+                            image_media_type = "image/png"
+
+                    elif file_name.endswith(".docx"):
+                        from io import BytesIO as BIO
+                        word_doc = Document(BIO(file_bytes))
+                        for para in word_doc.paragraphs:
+                            extracted_text += para.text + "\n"
+
+                    elif file_name.endswith((".jpg", ".jpeg", ".png")):
+                        is_image = True
+                        image_data = file_bytes
+                        image_media_type = "image/jpeg" if file_name.endswith((".jpg", ".jpeg")) else "image/png"
+
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+                    st.stop()
+
+            with st.spinner("Analysing with AI..."):
+                try:
+                    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+
+                    system_prompt = """You are LexScan — an AI legal document analyst specialising in Indian law.
+You read legal documents and extract structured information for Indian lawyers.
+You are precise, accurate, and practical. You understand Indian court formats, BNS/BNSS/IPC/CrPC, and legal procedure."""
+
+                    analysis_prompt = f"""Analyse this legal document for a lawyer.
+
+CLIENT DETAILS:
+- Client: {scan_client}
+- Case Number: {scan_case}
+- Court: {scan_court}
+- Opponent: {scan_opponent}
+- Document Type: {scan_doc_type}
+
+Provide a COMPLETE analysis in exactly this format:
+
+## 📄 DOCUMENT SUMMARY
+[2-3 sentences explaining what this document is and what it says in plain language]
+
+## ⚖️ KEY LEGAL ISSUES
+[List each legal issue found — numbered, one per line]
+
+## 📚 RELEVANT SECTIONS
+[List all BNS/BNSS/IPC/CrPC/other sections mentioned in the document]
+
+## 📅 IMPORTANT DATES
+[List ALL dates found in the document in this EXACT format — one per line:
+DATE: [date] | TYPE: [Hearing/Deadline/Limitation/Filing/Arrest/Other] | DESCRIPTION: [what happens on this date] | URGENCY: [High/Medium/Low]]
+
+## ✅ ACTION ITEMS
+[List what the lawyer must do next — numbered, specific, actionable]
+
+## ⚠️ RISKS AND WARNINGS
+[Any legal risks, missed deadlines, or concerns the lawyer should know immediately]"""
+
+                    # Build message content based on file type
+                    if is_image and image_data:
+                        import base64
+                        encoded = base64.standard_b64encode(image_data).decode("utf-8")
+                        message_content = [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image_media_type,
+                                    "data": encoded
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": analysis_prompt
+                            }
+                        ]
+                    else:
+                        message_content = f"{analysis_prompt}\n\nDOCUMENT TEXT:\n{extracted_text[:8000]}"
+
+                    message = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=4096,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": message_content}]
+                    )
+
+                    analysis = message.content[0].text
+
+                    # ── Display Analysis ─────────────────────────────────
+                    st.markdown("---")
+                    st.markdown("### 🔬 Document Analysis")
+                    st.markdown(analysis)
+
+                    # ── Extract and Store Dates ──────────────────────────
+                    st.markdown("---")
+                    st.markdown("### 📅 Dates Extracted & Saved")
+
+                    dates_extracted = 0
+                    for line in analysis.split("\n"):
+                        line = line.strip()
+                        if line.startswith("DATE:") and "TYPE:" in line and "DESCRIPTION:" in line:
+                            try:
+                                parts = line.split("|")
+                                date_val = parts[0].replace("DATE:", "").strip()
+                                type_val = parts[1].replace("TYPE:", "").strip()
+                                desc_val = parts[2].replace("DESCRIPTION:", "").strip()
+                                urgency_val = parts[3].replace("URGENCY:", "").strip() if len(parts) > 3 else "Medium"
+
+                                date_entry = {
+                                    "client_name": scan_client,
+                                    "case_number": scan_case if scan_case else "Not specified",
+                                    "court": scan_court if scan_court else "Not specified",
+                                    "opponent": scan_opponent if scan_opponent else "Not specified",
+                                    "date": date_val,
+                                    "type": type_val,
+                                    "description": desc_val,
+                                    "urgency": urgency_val,
+                                    "document_scanned": f"{scan_doc_type} — {uploaded_file.name}"
+                                }
+
+                                st.session_state.scanned_dates.append(date_entry)
+                                dates_extracted += 1
+
+                                urgency_color = "🔴" if urgency_val == "High" else "🟡" if urgency_val == "Medium" else "🟢"
+                                st.markdown(f"{urgency_color} **{date_val}** — {type_val}: {desc_val}")
+
+                            except Exception:
+                                continue
+
+                    if dates_extracted > 0:
+                        st.success(f"✅ {dates_extracted} date(s) saved to LexDiary.")
+                    else:
+                        st.info("No structured dates found in this document.")
+
+                    # ── Save to scanned_docs log ─────────────────────────
+                    st.session_state.scanned_docs.append({
+                        "client": scan_client,
+                        "case": scan_case,
+                        "doc_type": scan_doc_type,
+                        "file": uploaded_file.name,
+                        "dates_found": dates_extracted
+                    })
+
+                    st.session_state.history.append({
+                        "module": "🔬 LexScan",
+                        "query": f"{scan_doc_type} — {scan_client}"
+                    })
+
+                except Exception as e:
+                    st.error(f"Analysis error: {str(e)}")
+
+    # ── Saved Dates Viewer ───────────────────────────────────────────────────
+    if st.session_state.scanned_dates:
+        st.markdown("---")
+        st.markdown("### 🗓️ All Saved Dates")
+        st.markdown("*Dates extracted from all scanned documents in this session.*")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            all_clients = ["All Clients"] + list(set(d["client_name"] for d in st.session_state.scanned_dates))
+            filter_client = st.selectbox("Filter by Client", all_clients)
+        with col2:
+            filter_type = st.selectbox("Filter by Type", ["All Types", "Hearing", "Deadline", "Limitation", "Filing", "Arrest", "Other"])
+        with col3:
+            filter_urgency = st.selectbox("Filter by Urgency", ["All", "High", "Medium", "Low"])
+
+        filtered = st.session_state.scanned_dates
+        if filter_client != "All Clients":
+            filtered = [d for d in filtered if d["client_name"] == filter_client]
+        if filter_type != "All Types":
+            filtered = [d for d in filtered if filter_type.lower() in d["type"].lower()]
+        if filter_urgency != "All":
+            filtered = [d for d in filtered if d["urgency"] == filter_urgency]
+
+        if filtered:
+            for d in filtered:
+                urgency_color = "🔴" if d["urgency"] == "High" else "🟡" if d["urgency"] == "Medium" else "🟢"
+                with st.expander(f"{urgency_color} {d['date']} — {d['client_name']} — {d['type']}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Client:** {d['client_name']}")
+                        st.markdown(f"**Case:** {d['case_number']}")
+                        st.markdown(f"**Court:** {d['court']}")
+                    with col2:
+                        st.markdown(f"**Date:** {d['date']}")
+                        st.markdown(f"**Type:** {d['type']}")
+                        st.markdown(f"**Urgency:** {urgency_color} {d['urgency']}")
+                    st.markdown(f"**Description:** {d['description']}")
+                    st.markdown(f"**From Document:** {d['document_scanned']}")
+        else:
+            st.info("No dates match the selected filters.")
+
+        if st.button("🗑️ Clear All Saved Dates"):
+            st.session_state.scanned_dates = []
+            st.rerun()
+                   
+               
+                        
+                        
+                            
+                            
+                    
+                        
+                        
+                             
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
