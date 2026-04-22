@@ -117,7 +117,7 @@ with st.sidebar:
             st.session_state.module = "lexdebate"
 
     with st.expander("📁 File Management"):
-        if st.button("LexDiary - Case Diary"):
+        if st.button("LexCause - Daily Cause List"):
             st.session_state.module = "lexdiary"
         if st.button("LexVault - File Storage"):
             st.session_state.module = "lexvault"
@@ -488,95 +488,183 @@ You are the lawyer every lawyer wishes they could call at midnight before a hear
                         st.error(f"Error: {str(e)}")
 
 # ─── LEXTRACK MODULE ─────────────────────────────────────────────────────────
-
 elif st.session_state.module == "lextrack":
     st.markdown("## 📡 LexTrack — Live Case Updates")
-    st.markdown("*Enter a CNR number to get real-time case status, hearing dates, and orders.*")
+    st.markdown("*Track cases by CNR number or search by party name, advocate, or judge.*")
     st.markdown("---")
-    
-    st.info("💡 **What is CNR?** Every court case in India has a unique CNR (Case Number Record). Format: DLHC010001232024 — State code + Court code + Case number + Year")
-    
-    col1, col2, col3 = st.columns([1,4,1])
-    with col2:
-        with st.form("lextrack_form"):
-            cnr_number = st.text_input(
-                label="CNR Number",
-                placeholder="e.g. DLHC010001232024",
-                label_visibility="collapsed"
-            )
-            track_clicked = st.form_submit_button("📡 Track Case")
-            if track_clicked and not cnr_number:
-                st.warning("Please enter a CNR Number")
-            if track_clicked and cnr_number:
-                st.session_state.history.append({"module": "📡 LexTrack", "query": cnr_number})
-                with st.spinner("Fetching live case data from eCourts..."):
+
+    track_tab1, track_tab2 = st.tabs(["🔍 Search Cases", "📋 CNR Lookup"])
+
+    # ── TAB 1: CASE SEARCH ───────────────────────────────────────────────────
+    with track_tab1:
+        st.markdown("### 🔍 Search Cases")
+        st.markdown("*Search by party name, advocate name, judge name, or any keyword.*")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            search_party = st.text_input("Party / Litigant Name", placeholder="e.g. Rajesh Kumar")
+            search_advocate = st.text_input("Advocate Name", placeholder="e.g. Adv. Sharma")
+        with col2:
+            search_judge = st.text_input("Judge Name", placeholder="e.g. Justice Gupta")
+            search_court_code = st.text_input("Court Code (optional)", placeholder="e.g. DLHC01")
+
+        search_status = st.selectbox("Case Status", ["All", "PENDING", "DISPOSED"])
+
+        if st.button("🔍 Search Cases"):
+            if not any([search_party, search_advocate, search_judge]):
+                st.warning("Please enter at least one search term.")
+            else:
+                with st.spinner("Searching 27 crore case records..."):
                     try:
-                        url = f"https://webapi.ecourtsindia.com/api/partner/case/{cnr_number.strip().upper()}"
-                        headers = {"Authorization": f"Bearer {ECOURTS_API_KEY}"}
-                        response = requests.get(url, headers=headers)
-                        if response.status_code == 200:
-                            data = response.json()
-                            st.success("✅ Case found!")
-                            st.markdown("---")
-                            
-                        
-                            # Case Details
-                            st.markdown("### 📋 Case Details")
-                            case_data = data.get('data', {}).get('courtCaseData', {})
-                            entity_info = data.get('data', {}).get('entityInfo', {})
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"**Case Number:** {case_data.get('filingNumber', 'N/A')}")
-                                st.markdown(f"**Case Type:** {case_data.get('caseTypeRaw', 'N/A')}")
-                                st.markdown(f"**Filing Date:** {case_data.get('filingDate', 'N/A')}")
-                                st.markdown(f"**Status:** {case_data.get('caseStatus', 'N/A')}")
-                            with col2:
-                                st.markdown(f"**Court:** {case_data.get('courtName', 'N/A')}")
-                                st.markdown(f"**Judge:** {', '.join(case_data.get('judges', ['N/A']))}")
-                                st.markdown(f"**Next Hearing:** {entity_info.get('nextDateOfHearing', 'N/A')}")
-                                st.markdown(f"**Last Hearing:** {case_data.get('lastHearingDate', 'N/A')}")
+                        params = {"pageSize": 10}
+                        if search_party:
+                            params["litigants"] = search_party
+                        if search_advocate:
+                            params["advocates"] = search_advocate
+                        if search_judge:
+                            params["judges"] = search_judge
+                        if search_court_code:
+                            params["courtCodes"] = search_court_code
+                        if search_status != "All":
+                            params["caseStatuses"] = search_status
 
-                            # Parties
-                            st.markdown("---")
-                            st.markdown("### 👥 Parties")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"**Petitioner:** {', '.join(case_data.get('petitioners', ['N/A']))}")
-                            with col2:
-                                st.markdown(f"**Respondent:** {', '.join(case_data.get('respondents', ['N/A']))}")
+                        search_url = "https://webapi.ecourtsindia.com/api/partner/search"
+                        search_headers = {"Authorization": f"Bearer {ECOURTS_API_KEY}"}
+                        search_response = requests.get(search_url, headers=search_headers, params=params)
 
-                            # Orders
-                            # Orders
-                            orders = case_data.get('judgmentOrders', [])
-                            files = data.get('data', {}).get('files', {}).get('files', [])
-                            if orders:
+                        if search_response.status_code == 200:
+                            search_data = search_response.json()
+                            results = search_data.get('data', {}).get('results', [])
+                            total = search_data.get('data', {}).get('totalHits', 0)
+
+                            if results:
+                                st.success(f"Found **{total}** cases. Showing top {len(results)}.")
                                 st.markdown("---")
-                                st.markdown("### 📄 Recent Orders")
-                                for i, order in enumerate(orders[:3]):
-                                    st.markdown(f"**{order.get('orderDate', 'N/A')}** — {order.get('orderType', 'N/A')}")
-                                    if i < len(files):
-                                        markdown_content = files[i].get('markdownContent', '')
-                                        if markdown_content:
-                                            with st.expander("📖 Read Full Order"):
-                                                st.markdown(markdown_content)
+                                for case in results:
+                                    petitioners = ', '.join(case.get('petitioners', ['Unknown']))
+                                    respondents = ', '.join(case.get('respondents', ['Unknown']))
+                                    title = f"{petitioners[:40]} vs {respondents[:40]}"
+                                    cnr = case.get('cnr', '')
+                                    status = case.get('caseStatus', 'N/A')
+                                    next_hearing = case.get('nextHearingDate', 'N/A')
+                                    court = case.get('courtCode', 'N/A')
+                                    case_type = case.get('caseType', 'N/A')
 
-                            # IAs
-                            ias = case_data.get('interlocutoryApplications', [])
-                            if ias:
-                                st.markdown("---")
-                                st.markdown("### 📑 Interlocutory Applications")
-                                for ia in ias[:3]:
-                                    st.markdown(f"**{ia.get('regNo', 'N/A')}** — Filed by: {ia.get('filedBy', 'N/A')} — Status: {ia.get('status', 'N/A')}")
-                                           
-                        elif response.status_code == 404:
-                            st.error("Case not found. Please check the CNR Number and try again")
-                        elif response.status_code == 401:
-                            st.error("API authentication failed. Please check your API key.")
+                                    status_icon = "🟢" if status == "PENDING" else "⚫"
+                                    with st.expander(f"{status_icon} {title}"):
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.markdown(f"**CNR:** {cnr}")
+                                            st.markdown(f"**Case Type:** {case_type}")
+                                            st.markdown(f"**Status:** {status}")
+                                            st.markdown(f"**Court:** {court}")
+                                        with col2:
+                                            st.markdown(f"**Next Hearing:** {next_hearing}")
+                                            st.markdown(f"**Filing Date:** {case.get('filingDate', 'N/A')}")
+                                            advocates = ', '.join(case.get('petitionerAdvocates', ['N/A']))
+                                            st.markdown(f"**Advocate:** {advocates}")
+                                        if cnr:
+                                            st.markdown(f"**🔗 View on eCourts:** [Click here](https://indiankanoon.org/search/?formInput={cnr})")
+                                        st.session_state.history.append({"module": "📡 LexTrack", "query": title[:60]})
+                            else:
+                                st.info("No cases found. Try different search terms.")
                         else:
-                            st.error(f"Error fetching case data. Status: {response.status_code}")
+                            st.error(f"Search failed. Status: {search_response.status_code}")
                     except Exception as e:
                         st.error(f"Connection error: {str(e)}")
 
+    # ── TAB 2: CNR LOOKUP ────────────────────────────────────────────────────
+    with track_tab2:
+        st.markdown("### 📋 CNR Lookup")
+        st.info("💡 **What is CNR?** Every court case in India has a unique CNR (Case Number Record). Format: DLHC010001232024 — State code + Court code + Case number + Year")
+
+        col1, col2, col3 = st.columns([1, 4, 1])
+        with col2:
+            with st.form("lextrack_form"):
+                cnr_number = st.text_input(
+                    label="CNR Number",
+                    placeholder="e.g. DLHC010001232024",
+                    label_visibility="collapsed"
+                )
+                track_clicked = st.form_submit_button("📡 Track Case")
+                if track_clicked and not cnr_number:
+                    st.warning("Please enter a CNR Number")
+                if track_clicked and cnr_number:
+                    st.session_state.history.append({"module": "📡 LexTrack", "query": cnr_number})
+                    with st.spinner("Fetching live case data from eCourts..."):
+                        try:
+                            url = f"https://webapi.ecourtsindia.com/api/partner/case/{cnr_number.strip().upper()}"
+                            headers = {"Authorization": f"Bearer {ECOURTS_API_KEY}"}
+                            response = requests.get(url, headers=headers)
+                            if response.status_code == 200:
+                                data = response.json()
+                                st.success("✅ Case found!")
+                                st.markdown("---")
+
+                                case_data = data.get('data', {}).get('courtCaseData', {})
+                                entity_info = data.get('data', {}).get('entityInfo', {})
+
+                                st.markdown("### 📋 Case Details")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**Case Number:** {case_data.get('filingNumber', 'N/A')}")
+                                    st.markdown(f"**Case Type:** {case_data.get('caseTypeRaw', 'N/A')}")
+                                    st.markdown(f"**Filing Date:** {case_data.get('filingDate', 'N/A')}")
+                                    st.markdown(f"**Status:** {case_data.get('caseStatus', 'N/A')}")
+                                with col2:
+                                    st.markdown(f"**Court:** {case_data.get('courtName', 'N/A')}")
+                                    st.markdown(f"**Judge:** {', '.join(case_data.get('judges', ['N/A']))}")
+                                    st.markdown(f"**Next Hearing:** {entity_info.get('nextDateOfHearing', 'N/A')}")
+                                    st.markdown(f"**Last Hearing:** {case_data.get('lastHearingDate', 'N/A')}")
+
+                                st.markdown("---")
+                                st.markdown("### 👥 Parties")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**Petitioner:** {', '.join(case_data.get('petitioners', ['N/A']))}")
+                                with col2:
+                                    st.markdown(f"**Respondent:** {', '.join(case_data.get('respondents', ['N/A']))}")
+
+                                # AI Case Summary
+                                ai_analysis = data.get('data', {}).get('caseAiAnalysis', {})
+                                if ai_analysis:
+                                    st.markdown("---")
+                                    st.markdown("### 🤖 AI Case Summary")
+                                    st.markdown(f"**Summary:** {ai_analysis.get('caseSummary', 'N/A')}")
+                                    st.markdown(f"**Case Type:** {ai_analysis.get('caseType', 'N/A')}")
+                                    st.markdown(f"**Complexity:** {ai_analysis.get('complexity', 'N/A')}")
+                                    key_issues = ai_analysis.get('keyIssues', [])
+                                    if key_issues:
+                                        st.markdown(f"**Key Issues:** {', '.join(key_issues)}")
+
+                                orders = case_data.get('judgmentOrders', [])
+                                files = data.get('data', {}).get('files', {}).get('files', [])
+                                if orders:
+                                    st.markdown("---")
+                                    st.markdown("### 📄 Recent Orders")
+                                    for i, order in enumerate(orders[:3]):
+                                        st.markdown(f"**{order.get('orderDate', 'N/A')}** — {order.get('orderType', 'N/A')}")
+                                        if i < len(files):
+                                            markdown_content = files[i].get('markdownContent', '')
+                                            if markdown_content:
+                                                with st.expander("📖 Read Full Order"):
+                                                    st.markdown(markdown_content)
+
+                                ias = case_data.get('interlocutoryApplications', [])
+                                if ias:
+                                    st.markdown("---")
+                                    st.markdown("### 📑 Interlocutory Applications")
+                                    for ia in ias[:3]:
+                                        st.markdown(f"**{ia.get('regNo', 'N/A')}** — Filed by: {ia.get('filedBy', 'N/A')} — Status: {ia.get('status', 'N/A')}")
+
+                            elif response.status_code == 404:
+                                st.error("Case not found. Please check the CNR Number.")
+                            elif response.status_code == 401:
+                                st.error("API authentication failed.")
+                            else:
+                                st.error(f"Error fetching case data. Status: {response.status_code}")
+                        except Exception as e:
+                            st.error(f"Connection error: {str(e)}")
 # ─── LEXDRAFT MODULE ─────────────────────────────────────────────────────────
 elif st.session_state.module == "lexdraft":
     st.markdown("## ✍️ LexDraft — Legal Document Generator")
@@ -2773,7 +2861,97 @@ Remember: You are building the international law arsenal that wins cases. Every 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                         
-                        
+   # ─── LEXCAUSE MODULE ─────────────────────────────────────────────────────────
+elif st.session_state.module == "lexdiary":
+    st.markdown("## 📅 LexCause — Daily Cause List")
+    st.markdown("*See all cases listed for hearing today for any advocate, judge, or court.*")
+    st.markdown("---")
+
+    st.info("🤖 **LexCause** fetches the live daily cause list from eCourts. Know your court schedule before you leave home.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        cause_advocate = st.text_input("Advocate Name", placeholder="e.g. Adv. Rahul Sharma")
+        cause_judge = st.text_input("Judge Name", placeholder="e.g. Justice Gupta")
+        cause_litigant = st.text_input("Party / Litigant Name", placeholder="e.g. State of Delhi")
+    with col2:
+        cause_state = st.text_input("State Code", placeholder="e.g. DL for Delhi, UP for UP, MH for Maharashtra")
+        cause_date = st.date_input("Date", value=None)
+        cause_type = st.selectbox("List Type", ["All", "CIVIL", "CRIMINAL"])
+
+    if st.button("📅 Fetch Cause List"):
+        if not any([cause_advocate, cause_judge, cause_litigant, cause_state]):
+            st.warning("Please enter at least one search term.")
+        else:
+            with st.spinner("Fetching live cause list from eCourts..."):
+                try:
+                    params = {"limit": 20}
+                    if cause_advocate:
+                        params["advocate"] = cause_advocate
+                    if cause_judge:
+                        params["judge"] = cause_judge
+                    if cause_litigant:
+                        params["litigant"] = cause_litigant
+                    if cause_state:
+                        params["state"] = cause_state.upper()
+                    if cause_date:
+                        params["date"] = cause_date.strftime("%Y-%m-%d")
+                    if cause_type != "All":
+                        params["listType"] = cause_type
+
+                    cause_url = "https://webapi.ecourtsindia.com/api/partner/causelist/search"
+                    cause_headers = {"Authorization": f"Bearer {ECOURTS_API_KEY}"}
+                    cause_response = requests.get(cause_url, headers=cause_headers, params=params)
+
+                    if cause_response.status_code == 200:
+                        cause_data = cause_response.json()
+                        results = cause_data.get('data', {}).get('results', [])
+                        total = cause_data.get('data', {}).get('returnedCount', 0)
+
+                        if results:
+                            st.success(f"✅ Found **{total}** cases on cause list.")
+                            st.markdown("---")
+
+                            for case in results:
+                                party = case.get('party', 'Unknown vs Unknown')
+                                date = case.get('date', 'N/A')
+                                court_name = case.get('courtName', 'N/A')
+                                district = case.get('district', 'N/A')
+                                state = case.get('state', 'N/A')
+                                judge = ', '.join(case.get('judge', ['N/A']))
+                                advocates = ', '.join(case.get('advocates', ['N/A']))
+                                status = case.get('status', 'N/A')
+                                list_type = case.get('listType', 'N/A')
+                                listing_no = case.get('listingNo', 'N/A')
+                                case_numbers = ', '.join(case.get('caseNumber', ['N/A']))
+                                cnr = case.get('cnr', None)
+
+                                type_icon = "⚖️" if list_type == "CIVIL" else "🔒"
+                                with st.expander(f"{type_icon} #{listing_no} — {party[:70]}"):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"**Date:** {date}")
+                                        st.markdown(f"**Case Number:** {case_numbers}")
+                                        st.markdown(f"**Court:** {court_name}")
+                                        st.markdown(f"**District:** {district}, {state}")
+                                    with col2:
+                                        st.markdown(f"**Judge:** {judge}")
+                                        st.markdown(f"**Advocates:** {advocates}")
+                                        st.markdown(f"**Status:** {status}")
+                                        st.markdown(f"**List Type:** {list_type}")
+                                    if cnr:
+                                        st.markdown(f"**CNR:** {cnr}")
+
+                            st.session_state.history.append({
+                                "module": "📅 LexCause",
+                                "query": cause_advocate or cause_litigant or cause_state
+                            })
+                        else:
+                            st.info("No cases found on cause list for these criteria. Try different date or search terms.")
+                    else:
+                        st.error(f"Cause list fetch failed. Status: {cause_response.status_code}")
+                except Exception as e:
+                    st.error(f"Connection error: {str(e)}")                     
                              
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
