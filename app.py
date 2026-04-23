@@ -2952,7 +2952,290 @@ elif st.session_state.module == "lexdiary":
                         st.error(f"Cause list fetch failed. Status: {cause_response.status_code}")
                 except Exception as e:
                     st.error(f"Connection error: {str(e)}")                     
-                             
+
+# ─── LEXPREDICT MODULE ───────────────────────────────────────────────────────
+elif st.session_state.module == "lexpredict":
+    st.markdown("## 📊 LexPredict — Case Outcome Predictor")
+    st.markdown("*Advanced AI prediction engine powered by real Indian case law analysis.*")
+    st.markdown("---")
+
+    st.warning("⚠️ **Disclaimer:** LexPredict provides AI-based analysis only — not legal advice. Always consult a qualified advocate.")
+
+    # ── Input Form ───────────────────────────────────────────────────────────
+    st.markdown("### 📋 Case Details")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        predict_case_type = st.selectbox("Case Type", [
+            "Bail Application (Criminal)",
+            "Anticipatory Bail",
+            "Quashing Petition",
+            "Writ Petition (Fundamental Rights)",
+            "Criminal Appeal",
+            "Civil Suit",
+            "Consumer Complaint",
+            "Cheque Bounce (S.138 NI Act)",
+            "Matrimonial Dispute",
+            "Property Dispute",
+            "Service Matter",
+            "Other"
+        ])
+        predict_court = st.selectbox("Court Level", [
+            "Sessions Court / Magistrate Court",
+            "High Court",
+            "Supreme Court of India",
+            "Consumer Forum",
+            "Tribunal"
+        ])
+        predict_charges = st.text_input("Sections / Charges", placeholder="e.g. S.302 BNS, S.307 BNS")
+        predict_state = st.text_input("State / Jurisdiction", placeholder="e.g. Delhi, UP, Maharashtra")
+
+    with col2:
+        predict_prior_record = st.selectbox("Prior Criminal Record", ["None", "Minor offences", "Similar offences", "Multiple serious offences"])
+        predict_custody = st.selectbox("Current Status", ["In Custody", "On Bail", "Anticipatory Bail Seeker"])
+        predict_custody_days = st.number_input("Days in Custody (if applicable)", min_value=0, max_value=3000, value=0)
+        predict_chargesheet = st.selectbox("Chargesheet Filed?", ["Not yet filed", "Filed", "Not applicable"])
+        predict_evidence = st.selectbox("Nature of Evidence Against Accused", ["No evidence", "Circumstantial only", "Some direct evidence", "Strong direct evidence", "Eyewitness + forensic"])
+        predict_favour = st.selectbox("Predict outcome for:", ["Defence / Accused", "Prosecution / Plaintiff"])
+
+    predict_facts = st.text_area(
+        "Brief Facts of the Case",
+        placeholder="Describe the key facts — what happened, who is involved, what evidence exists, what the prosecution/plaintiff is claiming...",
+        height=120
+    )
+
+    predict_additional = st.text_area(
+        "Additional Factors (optional)",
+        placeholder="e.g. Victim is cooperative / Co-accused got bail / Age of accused is 60 / Accused is sole breadwinner / Medical condition...",
+        height=80
+    )
+
+    if st.button("📊 Predict Outcome"):
+        if not predict_facts:
+            st.warning("Please enter the facts of the case.")
+        else:
+            # ── Search 1: Indian Kanoon — Similar cases with full text ───────
+            with st.spinner("📚 Fetching similar Indian case judgments..."):
+                similar_cases_full = ""
+                similar_cases_list = []
+                try:
+                    search_query = f"{predict_charges} {predict_case_type} {predict_state} bail judgment"
+                    ik_params = {"formInput": search_query, "pagenum": 0}
+                    ik_url = "https://api.indiankanoon.org/search/"
+                    ik_headers = {"Authorization": f"Token {INDIAN_KANOON_TOKEN}"}
+                    ik_response = requests.post(ik_url, headers=ik_headers, params=ik_params)
+                    if ik_response.status_code == 200:
+                        ik_data = ik_response.json()
+                        for doc in ik_data.get('docs', [])[:3]:
+                            clean_title = re.sub(r'<[^>]+>', '', doc.get('title', ''))
+                            clean_court = re.sub(r'<[^>]+>', '', doc.get('docsource', ''))
+                            doc_id = doc.get('tid', '')
+                            similar_cases_list.append({
+                                "title": clean_title,
+                                "court": clean_court,
+                                "date": doc.get('publishdate', ''),
+                                "id": doc_id
+                            })
+                            # Fetch full judgment text
+                            j_url = f"https://api.indiankanoon.org/doc/{doc_id}/"
+                            j_response = requests.post(j_url, headers=ik_headers)
+                            if j_response.status_code == 200:
+                                j_text = j_response.json().get('doc', '')[:3000]
+                                similar_cases_full += f"\n\nCASE: {clean_title} | {clean_court} | {doc.get('publishdate', '')}\n{j_text}\n"
+                except Exception:
+                    similar_cases_full = "Similar case search unavailable."
+
+            # ── Search 2: Tavily — Recent judgments on specific section ──────
+            with st.spinner("🔍 Searching recent judgments on these sections..."):
+                recent_judgments = ""
+                try:
+                    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                    tavily_results = tavily_client.search(
+                        query=f"{predict_charges} {predict_case_type} {predict_court} India 2024 2025 judgment outcome",
+                        search_depth="basic",
+                        max_results=3
+                    )
+                    for result in tavily_results.get("results", []):
+                        recent_judgments += f"- {result['title']}: {result['content'][:300]}\n"
+                except Exception:
+                    recent_judgments = "Recent judgment search unavailable."
+
+            # ── Build prediction prompt ───────────────────────────────────────
+            with st.spinner("⚡ Running prediction engine..."):
+                client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                prompt = f"""You are LexPredict — India's most advanced case outcome prediction engine.
+
+CASE DETAILS:
+- Case Type: {predict_case_type}
+- Court Level: {predict_court}
+- Charges/Sections: {predict_charges}
+- Jurisdiction: {predict_state}
+- Prior Criminal Record: {predict_prior_record}
+- Current Status: {predict_custody}
+- Days in Custody: {predict_custody_days}
+- Chargesheet Status: {predict_chargesheet}
+- Evidence Strength: {predict_evidence}
+- Predicting for: {predict_favour}
+- Facts: {predict_facts}
+- Additional Factors: {predict_additional}
+
+REAL SIMILAR JUDGMENTS FROM INDIAN KANOON:
+{similar_cases_full[:4000]}
+
+RECENT DEVELOPMENTS (2024-2025):
+{recent_judgments}
+
+Provide a COMPREHENSIVE outcome prediction. You must extract specific numbers for the dashboard.
+
+## 📊 OUTCOME PREDICTION DASHBOARD
+
+**VERDICT:** [LIKELY TO SUCCEED / LIKELY TO FAIL / UNCERTAIN]
+
+**SUCCESS PROBABILITY:** [Give a specific number 0-100 based on the facts and similar cases]
+
+**FACTOR SCORES** (score each factor 0-10 where 10 = strongly favours {predict_favour}):
+- Prior Record Score: [0-10]
+- Evidence Strength Score: [0-10]
+- Legal Provisions Score: [0-10]
+- Procedural Compliance Score: [0-10]
+- Judicial Precedent Score: [0-10]
+
+---
+
+## ⚖️ FACTORS IN FAVOUR
+[Numbered list — specific, cite law or precedent for each]
+
+---
+
+## ❌ FACTORS AGAINST
+[Numbered list — specific, cite law or precedent for each]
+
+---
+
+## 📚 SIMILAR CASES ANALYSIS
+[Analyse the actual judgments provided above — what happened in those cases, how similar they are, what the courts decided and why. Be specific about case names and outcomes.]
+
+---
+
+## 🔮 SCENARIO ANALYSIS
+
+**Best Case (probability: [X]%):** [What happens and why]
+**Most Likely (probability: [X]%):** [What probably happens]
+**Worst Case (probability: [X]%):** [What could go wrong]
+
+---
+
+## ✅ IMMEDIATE ACTION ITEMS
+[Numbered — specific steps lawyer must take NOW to improve chances]
+
+---
+
+## ⚠️ CRITICAL RISKS
+[Top 3 risks with specific legal reasons]
+
+---
+
+## 🎯 JUDGE'S LIKELY FOCUS
+[What will the judge focus on at {predict_court} level for {predict_case_type}]
+
+---
+
+## 📋 WINNING STRATEGY
+[Specific tactical advice — what arguments to lead with, what precedents to cite, how to present the case]
+
+Be specific, cite actual Indian cases with AIR/SCC citations, and give a genuine honest assessment."""
+
+                try:
+                    message = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=4096,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    analysis = message.content[0].text
+
+                    # ── Extract scores for dashboard ─────────────────────────
+                    import re as re2
+                    scores = {}
+                    score_patterns = {
+                        "Prior Record": r"Prior Record Score:\s*\[?(\d+)",
+                        "Evidence": r"Evidence Strength Score:\s*\[?(\d+)",
+                        "Legal Provisions": r"Legal Provisions Score:\s*\[?(\d+)",
+                        "Procedural": r"Procedural Compliance Score:\s*\[?(\d+)",
+                        "Precedent": r"Judicial Precedent Score:\s*\[?(\d+)"
+                    }
+                    for key, pattern in score_patterns.items():
+                        match = re2.search(pattern, analysis)
+                        scores[key] = int(match.group(1)) if match else 5
+
+                    prob_match = re2.search(r"SUCCESS PROBABILITY.*?(\d+)", analysis)
+                    success_prob = int(prob_match.group(1)) if prob_match else 50
+                    fail_prob = 100 - success_prob
+
+                    # ── DASHBOARD ─────────────────────────────────────────────
+                    st.markdown("---")
+                    st.markdown("### 📊 Prediction Dashboard")
+
+                    # Probability gauge
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        color = "🟢" if success_prob >= 60 else "🟡" if success_prob >= 40 else "🔴"
+                        st.metric(
+                            label="Success Probability",
+                            value=f"{success_prob}%",
+                            delta=f"{color} {'Favourable' if success_prob >= 60 else 'Uncertain' if success_prob >= 40 else 'Unfavourable'}"
+                        )
+                    with col2:
+                        st.metric(
+                            label="Case Type",
+                            value=predict_case_type[:20]
+                        )
+                    with col3:
+                        st.metric(
+                            label="Court Level",
+                            value=predict_court[:20]
+                        )
+
+                    st.markdown("---")
+
+                    # Bar chart — factor scores
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**⚖️ Factor Analysis**")
+                        import pandas as pd
+                        scores_df = pd.DataFrame({
+                            "Factor": list(scores.keys()),
+                            "Score": list(scores.values())
+                        })
+                        st.bar_chart(scores_df.set_index("Factor"))
+
+                    with col2:
+                        st.markdown("**🎯 Outcome Probability**")
+                        outcome_df = pd.DataFrame({
+                            "Outcome": ["Success", "Failure"],
+                            "Probability": [success_prob, fail_prob]
+                        })
+                        st.bar_chart(outcome_df.set_index("Outcome"))
+
+                    st.markdown("---")
+
+                    # Similar cases found
+                    if similar_cases_list:
+                        st.markdown("### 📚 Similar Cases Analysed")
+                        for case in similar_cases_list:
+                            st.markdown(f"- **{case['title']}** | {case['court']} | {case['date']} | [Read →](https://indiankanoon.org/doc/{case['id']}/)")
+
+                    st.markdown("---")
+                    st.markdown("### 🔮 Full Prediction Analysis")
+                    st.markdown(analysis)
+
+                    st.session_state.history.append({
+                        "module": "📊 LexPredict",
+                        "query": f"{predict_case_type} — {predict_charges}"
+                    })
+
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                                                 
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
