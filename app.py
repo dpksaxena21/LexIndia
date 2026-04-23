@@ -3235,7 +3235,224 @@ Be specific, cite actual Indian cases with AIR/SCC citations, and give a genuine
 
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
-                                                 
+
+# ─── LEXBENCH MODULE ─────────────────────────────────────────────────────────
+elif st.session_state.module == "lexbench":
+    st.markdown("## ⚖️ LexBench — Judge Analysis")
+    st.markdown("*Research any judge's past judgments and understand their judicial philosophy before your hearing.*")
+    st.markdown("---")
+
+    st.info("🤖 **LexBench AI** searches Indian Kanoon for the judge's past judgments, analyses patterns, and tells you how to present your case most effectively before that specific judge.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        judge_name = st.text_input("Judge Name", placeholder="e.g. Justice D.Y. Chandrachud, Justice Sanjiv Khanna")
+        judge_court = st.selectbox("Court", [
+            "Supreme Court of India",
+            "Delhi High Court",
+            "Bombay High Court",
+            "Madras High Court",
+            "Calcutta High Court",
+            "Allahabad High Court",
+            "Karnataka High Court",
+            "Other High Court",
+            "Sessions Court",
+            "District Court"
+        ])
+    with col2:
+        judge_case_type = st.selectbox("Your Case Type", [
+            "Bail Application",
+            "Anticipatory Bail",
+            "Quashing Petition",
+            "Writ Petition",
+            "Criminal Appeal",
+            "Civil Suit",
+            "Constitutional Matter",
+            "Other"
+        ])
+        judge_subject = st.text_input("Subject Matter (optional)", placeholder="e.g. murder, cheque bounce, property dispute")
+
+    if st.button("⚖️ Analyse Judge"):
+        if not judge_name:
+            st.warning("Please enter a judge name.")
+        else:
+            # ── Search Indian Kanoon for judge's judgments ────────────────
+            with st.spinner(f"📚 Searching judgments by {judge_name}..."):
+                judge_cases = []
+                judge_text_combined = ""
+                try:
+                    ik_query = f"author:{judge_name} {judge_case_type} {judge_subject}"
+                    ik_params = {"formInput": ik_query, "pagenum": 0}
+                    ik_url = "https://api.indiankanoon.org/search/"
+                    ik_headers = {"Authorization": f"Token {INDIAN_KANOON_TOKEN}"}
+                    ik_response = requests.post(ik_url, headers=ik_headers, params=ik_params)
+                    if ik_response.status_code == 200:
+                        ik_data = ik_response.json()
+                        for doc in ik_data.get('docs', [])[:5]:
+                            clean_title = re.sub(r'<[^>]+>', '', doc.get('title', ''))
+                            clean_court = re.sub(r'<[^>]+>', '', doc.get('docsource', ''))
+                            doc_id = doc.get('tid', '')
+                            judge_cases.append({
+                                "title": clean_title,
+                                "court": clean_court,
+                                "date": doc.get('publishdate', ''),
+                                "id": doc_id
+                            })
+                            # Fetch full judgment text
+                            j_url = f"https://api.indiankanoon.org/doc/{doc_id}/"
+                            j_response = requests.post(j_url, headers=ik_headers)
+                            if j_response.status_code == 200:
+                                j_text = j_response.json().get('doc', '')[:2000]
+                                judge_text_combined += f"\nCASE: {clean_title} | {clean_court} | {doc.get('publishdate', '')}\n{j_text}\n"
+                except Exception:
+                    judge_text_combined = "Judgment search unavailable."
+
+            # ── Tavily search for judge profile ──────────────────────────
+            with st.spinner(f"🔍 Searching for {judge_name}'s judicial profile..."):
+                judge_profile = ""
+                try:
+                    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                    tavily_results = tavily_client.search(
+                        query=f"Judge {judge_name} {judge_court} judicial philosophy bail views landmark judgments",
+                        search_depth="basic",
+                        max_results=3
+                    )
+                    for result in tavily_results.get("results", []):
+                        judge_profile += f"- {result['title']}: {result['content'][:300]}\n"
+                except Exception:
+                    judge_profile = "Profile search unavailable."
+
+            # ── Claude analysis ───────────────────────────────────────────
+            with st.spinner("🤖 Analysing judicial patterns..."):
+                client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                prompt = f"""You are LexBench — an expert judicial analyst specialising in Indian courts.
+
+A lawyer is appearing before this judge and needs to understand how to present their case.
+
+JUDGE: {judge_name}
+COURT: {judge_court}
+LAWYER'S CASE TYPE: {judge_case_type}
+SUBJECT MATTER: {judge_subject}
+
+PAST JUDGMENTS FROM INDIAN KANOON:
+{judge_text_combined[:5000]}
+
+JUDGE PROFILE FROM WEB:
+{judge_profile}
+
+Provide a COMPREHENSIVE judicial analysis in this format:
+
+## ⚖️ JUDGE PROFILE — {judge_name}
+
+**Court:** {judge_court}
+**Analysis Based On:** Past judgments and judicial record
+
+---
+
+## 📊 JUDICIAL PHILOSOPHY
+
+**Overall Approach:** [Conservative / Liberal / Moderate / Unpredictable]
+
+**Known For:** [What is this judge known for — bail views, constitutional interpretation, etc.]
+
+**Key Judicial Values:** [What principles does this judge consistently apply?]
+
+---
+
+## 🔍 BAIL TENDENCIES (if bail case)
+
+**Bail Grant Rate (estimated):** [High / Medium / Low based on judgments]
+
+**Factors This Judge Weighs Most:**
+1. [Factor 1 — e.g. flight risk]
+2. [Factor 2 — e.g. evidence strength]
+3. [Factor 3 — e.g. seriousness of offence]
+
+**Arguments That Work With This Judge:**
+[What types of arguments tend to succeed]
+
+**Arguments To Avoid:**
+[What types of arguments this judge dismisses]
+
+---
+
+## 📚 PATTERN FROM PAST JUDGMENTS
+
+[Analyse the actual judgments provided — what patterns emerge? How does this judge reason? What language do they use? What do they prioritize?]
+
+---
+
+## 🎯 CASE-SPECIFIC STRATEGY
+
+**For Your {judge_case_type} — How to Argue Before {judge_name}:**
+
+**Opening Argument:** [Exact recommended opening — first 2-3 sentences to say in court]
+
+**Key Points to Emphasize:**
+1. [Point 1]
+2. [Point 2]
+3. [Point 3]
+
+**Cases to Cite Before This Judge:**
+[Which precedents this judge is known to favour — from the judgments analysed]
+
+**Language and Tone:**
+[Should you be formal/informal? Technical/plain? Aggressive/deferential?]
+
+---
+
+## ⚠️ THINGS TO AVOID
+
+[Specific things that tend to irritate or not work with this judge — based on past judgments]
+
+---
+
+## 📋 IDEAL ARGUMENT STRUCTURE
+
+For a {judge_case_type} before {judge_name}, structure your argument in this order:
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+4. [Step 4]
+5. [Step 5]
+
+---
+
+## 🗣️ SAMPLE OPENING LINES
+
+"Your Lordship, [complete opening argument — 3-4 sentences — tailored to this judge's known preferences]"
+
+---
+
+⚠️ Note: This analysis is based on available judgments and may not capture the judge's complete judicial record. Always verify with recent judgments before your hearing.
+
+Be specific, practical, and directly useful for a lawyer appearing before this judge tomorrow."""
+
+                try:
+                    message = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=4096,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    analysis = message.content[0].text
+
+                    # ── Display judge cases found ─────────────────────────
+                    if judge_cases:
+                        st.markdown("### 📚 Judgments Analysed")
+                        for case in judge_cases:
+                            st.markdown(f"- **{case['title']}** | {case['court']} | {case['date']} | [Read →](https://indiankanoon.org/doc/{case['id']}/)")
+
+                    st.markdown("---")
+                    st.markdown("### ⚖️ Judge Analysis")
+                    st.markdown(analysis)
+
+                    st.session_state.history.append({
+                        "module": "⚖️ LexBench",
+                        "query": f"{judge_name} — {judge_case_type}"
+                    })
+
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")                                                 
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
