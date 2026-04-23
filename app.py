@@ -3452,7 +3452,212 @@ Be specific, practical, and directly useful for a lawyer appearing before this j
                     })
 
                 except Exception as e:
-                    st.error(f"Error: {str(e)}")                                                 
+                    st.error(f"Error: {str(e)}")      
+
+# ─── LEXPULSE MODULE ─────────────────────────────────────────────────────────
+elif st.session_state.module == "lexpulse":
+    st.markdown("## 📰 LexPulse — Legal News & Trends")
+    st.markdown("*Stay updated with the latest developments in Indian law, Supreme Court judgments, and legal trends.*")
+    st.markdown("---")
+
+    st.info("🤖 **LexPulse** fetches live legal news, recent Supreme Court judgments, and trending legal topics — updated in real time.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        pulse_category = st.selectbox("Category", [
+            "All Legal News",
+            "Supreme Court Judgments",
+            "High Court Judgments",
+            "Criminal Law",
+            "Constitutional Law",
+            "Corporate & Commercial Law",
+            "Family & Matrimonial Law",
+            "Property & Real Estate Law",
+            "Cyber Law & Technology",
+            "Labour & Employment Law",
+            "Environmental Law",
+            "New Laws & Amendments"
+        ])
+    with col2:
+        pulse_state = st.selectbox("Focus State (optional)", [
+            "All India",
+            "Delhi",
+            "Maharashtra",
+            "Uttar Pradesh",
+            "Tamil Nadu",
+            "Karnataka",
+            "West Bengal",
+            "Gujarat",
+            "Rajasthan",
+            "Madhya Pradesh"
+        ])
+
+    pulse_keyword = st.text_input("Search specific topic (optional)", placeholder="e.g. PMLA, Section 498A, RERA, NIA, bail reform")
+
+    if st.button("📰 Fetch Legal News & Trends"):
+        # Build search queries
+        base_query = pulse_keyword if pulse_keyword else pulse_category
+        state_filter = "" if pulse_state == "All India" else pulse_state
+
+        # ── Search 1: Latest legal news ───────────────────────────────────
+        with st.spinner("📰 Fetching latest legal news..."):
+            news_results = []
+            try:
+                tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                news_search = tavily_client.search(
+                    query=f"{base_query} {state_filter} India law court judgment 2025 2026",
+                    search_depth="basic",
+                    max_results=5
+                )
+                news_results = news_search.get("results", [])
+            except Exception:
+                news_results = []
+
+        # ── Search 2: Supreme Court recent judgments ──────────────────────
+        with st.spinner("🏛️ Fetching Supreme Court updates..."):
+            sc_results = []
+            try:
+                tavily_client2 = TavilyClient(api_key=TAVILY_API_KEY)
+                sc_search = tavily_client2.search(
+                    query=f"Supreme Court India {base_query} judgment ruling 2025 2026 landmark",
+                    search_depth="basic",
+                    max_results=3
+                )
+                sc_results = sc_search.get("results", [])
+            except Exception:
+                sc_results = []
+
+        # ── Search 3: Indian Kanoon — Recent cases ────────────────────────
+        with st.spinner("⚖️ Searching recent Indian Kanoon cases..."):
+            ik_results = []
+            try:
+                ik_query = f"{base_query} {state_filter} 2025"
+                ik_params = {"formInput": ik_query, "pagenum": 0}
+                ik_url = "https://api.indiankanoon.org/search/"
+                ik_headers = {"Authorization": f"Token {INDIAN_KANOON_TOKEN}"}
+                ik_response = requests.post(ik_url, headers=ik_headers, params=ik_params)
+                if ik_response.status_code == 200:
+                    ik_data = ik_response.json()
+                    for doc in ik_data.get('docs', [])[:5]:
+                        clean_title = re.sub(r'<[^>]+>', '', doc.get('title', ''))
+                        clean_court = re.sub(r'<[^>]+>', '', doc.get('docsource', ''))
+                        ik_results.append({
+                            "title": clean_title,
+                            "court": clean_court,
+                            "date": doc.get('publishdate', ''),
+                            "id": doc.get('tid', '')
+                        })
+            except Exception:
+                ik_results = []
+
+        # ── Claude analysis ───────────────────────────────────────────────
+        with st.spinner("🤖 Generating trend analysis..."):
+            news_text = "\n".join([f"- {r['title']}: {r['content'][:200]}" for r in news_results])
+            sc_text = "\n".join([f"- {r['title']}: {r['content'][:200]}" for r in sc_results])
+
+            client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+            prompt = f"""You are LexPulse — India's premier legal intelligence engine.
+
+CATEGORY: {pulse_category}
+FOCUS: {pulse_state}
+KEYWORD: {pulse_keyword}
+
+LATEST NEWS FROM WEB:
+{news_text}
+
+SUPREME COURT UPDATES:
+{sc_text}
+
+Provide a COMPREHENSIVE legal intelligence briefing in this format:
+
+## 📰 LEXPULSE LEGAL INTELLIGENCE BRIEFING
+### {pulse_category} | {pulse_state} | Today
+
+---
+
+## 🔥 TOP STORIES
+
+[List 3-5 most important recent developments — each with:
+**Headline:** [Clear headline]
+**What Happened:** [2-3 sentences — plain language]
+**Legal Impact:** [What this means for lawyers and clients]
+**Action Required:** [What lawyers should do in response — if anything]]
+
+---
+
+## 🏛️ SUPREME COURT WATCH
+
+[Recent Supreme Court developments relevant to this category — what the court has said, any new guidelines, landmark rulings. Cite specific cases where possible.]
+
+---
+
+## 📈 TRENDING LEGAL ISSUES
+
+[What legal issues are currently trending in Indian courts in this area? What types of cases are increasing? What arguments are courts currently accepting or rejecting?]
+
+---
+
+## ⚖️ RECENT LANDMARK JUDGMENTS
+
+[3-5 recent important judgments in this area — case name, court, date, key principle established. Focus on 2024-2026.]
+
+---
+
+## 📋 NEW LAWS & AMENDMENTS
+
+[Any recent legislative changes relevant to this category — new acts, amendments, notifications, circulars from 2024-2026]
+
+---
+
+## 💡 PRACTICE TIPS FOR LAWYERS
+
+[Based on current trends — what should lawyers in this practice area know and do right now? Practical advice based on the latest developments.]
+
+---
+
+## 🔮 WHAT TO WATCH
+
+[Upcoming cases, pending legislation, or developing situations that lawyers should track over the next 3-6 months]
+
+Be specific, cite actual cases and developments, and make this genuinely useful for a practicing Indian lawyer."""
+
+            try:
+                message = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                analysis = message.content[0].text
+
+                # ── Display news cards ────────────────────────────────────
+                if news_results:
+                    st.markdown("### 🔗 Live News Sources")
+                    cols = st.columns(2)
+                    for i, result in enumerate(news_results[:4]):
+                        with cols[i % 2]:
+                            st.markdown(f"**{result['title'][:60]}...**" if len(result['title']) > 60 else f"**{result['title']}**")
+                            st.markdown(f"{result['content'][:100]}...")
+                            st.markdown(f"[Read more →]({result['url']})")
+                            st.markdown("---")
+
+                # ── Recent cases from Indian Kanoon ──────────────────────
+                if ik_results:
+                    st.markdown("### ⚖️ Recent Cases on Indian Kanoon")
+                    for case in ik_results:
+                        st.markdown(f"- **{case['title']}** | {case['court']} | {case['date']} | [Read →](https://indiankanoon.org/doc/{case['id']}/)")
+
+                st.markdown("---")
+                st.markdown("### 📰 Legal Intelligence Briefing")
+                st.markdown(analysis)
+
+                st.session_state.history.append({
+                    "module": "📰 LexPulse",
+                    "query": f"{pulse_category} — {base_query}"
+                })
+
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                                                           
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
