@@ -3657,7 +3657,154 @@ Be specific, cite actual cases and developments, and make this genuinely useful 
 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
-                                                           
+
+# ─── LEXMAP MODULE ───────────────────────────────────────────────────────────
+elif st.session_state.module == "lexmap":
+    st.markdown("## 🗺️ LexMap — Court Locator")
+    st.markdown("*Find any court in India — address, contact, jurisdiction, and directions.*")
+    st.markdown("---")
+
+    st.info("🤖 **LexMap** finds courts across India with address, jurisdiction details, and AI-powered guidance on which court to file in.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        map_city = st.text_input("City / District", placeholder="e.g. Delhi, Mumbai, Lucknow, Patna")
+        map_court_type = st.selectbox("Court Type", [
+            "All Courts",
+            "High Court",
+            "Sessions Court / District Court",
+            "Magistrate Court",
+            "Family Court",
+            "Consumer Forum",
+            "Labour Court / Industrial Tribunal",
+            "Debt Recovery Tribunal (DRT)",
+            "National Company Law Tribunal (NCLT)",
+            "Income Tax Appellate Tribunal (ITAT)",
+            "Supreme Court of India"
+        ])
+    with col2:
+        map_case_type = st.selectbox("My Case Type (for filing guidance)", [
+            "Criminal — Bail / Trial",
+            "Criminal — Appeal",
+            "Civil — Property / Money",
+            "Civil — Injunction",
+            "Writ / Constitutional",
+            "Consumer Complaint",
+            "Family / Matrimonial",
+            "Labour / Service",
+            "Company / Corporate",
+            "Tax Matter",
+            "Other"
+        ])
+        map_query = st.text_input("Specific Query (optional)", placeholder="e.g. Which court for cheque bounce case in Delhi?")
+
+    if st.button("🗺️ Find Courts"):
+        if not map_city:
+            st.warning("Please enter a city or district.")
+        else:
+            with st.spinner(f"🔍 Finding courts in {map_city}..."):
+                court_info = ""
+                try:
+                    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+                    court_search = tavily_client.search(
+                        query=f"{map_court_type} {map_city} India address contact jurisdiction",
+                        search_depth="basic",
+                        max_results=5
+                    )
+                    for result in court_search.get("results", []):
+                        court_info += f"- {result['title']}: {result['content'][:300]}\n"
+                except Exception:
+                    court_info = "Court search unavailable."
+
+            with st.spinner("🤖 Generating court guidance..."):
+                client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+                prompt = f"""You are LexMap — India's court locator and filing guidance expert.
+
+CITY/DISTRICT: {map_city}
+COURT TYPE NEEDED: {map_court_type}
+CASE TYPE: {map_case_type}
+SPECIFIC QUERY: {map_query}
+
+COURT INFORMATION FROM WEB:
+{court_info}
+
+Provide COMPREHENSIVE court location guidance in this format:
+
+## 🗺️ COURTS IN {map_city.upper()}
+
+---
+
+## 🏛️ RELEVANT COURTS FOR YOUR CASE
+
+For each relevant court provide:
+
+**[Court Name]**
+- **Address:** [Complete address]
+- **Jurisdiction:** [What types of cases this court handles]
+- **Contact:** [Phone/email if available]
+- **Timing:** [Court hours — typically 10:30 AM to 4:30 PM]
+- **How to Reach:** [Nearest metro/bus/landmark]
+
+---
+
+## ⚖️ WHICH COURT TO FILE IN
+
+**For your {map_case_type} case:**
+
+**Correct Court:** [Specific court name]
+**Reason:** [Why this is the right court — jurisdiction, pecuniary limits, etc.]
+**Filing Counter:** [Where to file — which floor/section]
+
+---
+
+## 📋 COURT HIERARCHY IN {map_city.upper()}
+
+[Explain the court hierarchy — which court to approach first, which on appeal, etc.]
+
+---
+
+## 💡 PRACTICAL TIPS
+
+1. [Tip 1 — e.g. best time to visit, parking, documentation needed]
+2. [Tip 2 — e.g. filing fees, stamp duty]
+3. [Tip 3 — e.g. dress code, what to carry]
+
+---
+
+## 🔗 USEFUL LINKS
+
+- eCourts: https://districts.ecourts.gov.in
+- Supreme Court: https://www.sci.gov.in
+- High Court [State]: [relevant HC website]
+
+Be specific and practical. Include actual addresses where you know them."""
+
+                try:
+                    message = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=2048,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+
+                    # ── Google Maps embed ─────────────────────────────────
+                    map_query_encoded = f"{map_court_type} {map_city} India".replace(" ", "+")
+                    maps_url = f"https://maps.google.com/maps?q={map_query_encoded}&output=embed"
+                    st.markdown("### 🗺️ Map View")
+                    st.markdown(f'<iframe width="100%" height="400" src="{maps_url}" frameborder="0" allowfullscreen></iframe>', unsafe_allow_html=True)
+
+                    st.markdown("---")
+                    st.markdown("### 🏛️ Court Guidance")
+                    st.markdown(message.content[0].text)
+
+                    st.session_state.history.append({
+                        "module": "🗺️ LexMap",
+                        "query": f"{map_court_type} — {map_city}"
+                    })
+
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")  
+                    
+                                                                             
 # ─── COMING SOON MODULES ─────────────────────────────────────────────────────
 else:
     st.markdown("## 🚧 Coming Soon")
